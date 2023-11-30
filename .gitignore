@@ -1,3 +1,6 @@
+# Ignore virtual link
+CMakeLists.txt
+
 devel/
 logs/
 build/
