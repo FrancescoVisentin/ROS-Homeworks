@@ -64,7 +64,7 @@ void detectPositions(const sensor_msgs::LaserScan::ConstPtr& msg) {
     // Convert the detected points from polar to cartesian 2D coordinates
     for (int i = 0; i < msg->ranges.size(); i++) {
         float range = msg->ranges[i];
-        float angle = i*msg->angle_increment;
+        float angle = msg->angle_min + i*msg->angle_increment;
         
         if (range >= msg->range_min && range <= msg->range_max) {
             Point p = Point(range*cos(angle), range*sin(angle));
