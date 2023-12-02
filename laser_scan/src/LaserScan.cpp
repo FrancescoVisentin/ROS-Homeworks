@@ -2,6 +2,7 @@
 #include <sensor_msgs/LaserScan.h>
 #include <ros/ros.h>
 #include <cmath>
+#include <set>
 #include "k-means.h"
 
 using namespace std;
@@ -74,40 +75,77 @@ void detectPositions(const sensor_msgs::LaserScan::ConstPtr& msg) {
 
     // Use k-means clustering and the silhoutte coefficient to guess the number of people
     // General idea: if we suppose to have N people then we will have 2*N feet.
-    //      Mapping the detected points in space we then expect to compute two "good" clustering
+    //      Mapping the detected points in space we then expect to compute two "good" clusterings
     //      for two different values of K:
     //      1) Fixing K=2*N we expect to assign a center to each points cloud of each foot
     //      2) Fixing K=N we expect to assign a center in between each pair of feet
     //
     // Therefore we select the number of people N as follow:
-    //      - At each iter increase N by 1 and compute two clusteings fixing K=N and K=2*N
+    //      - At each iter increase N by 1 and compute two clusterings fixing K=N and K=2*N
     //      - Compute and sum the silhouette coefficients for the two clusterings
     //      - Select N from the iteration with the highest sum 
     //
+    // The silhouette coefficient is not defined for K=1, and therefore we use K=2 to evaluate
+    // both clusterings. In fact, if we assume there is only 1 person and therefore 2 feet, then
+    // we expect both the clustering with "fixed" centroids and the one with "free" centroids
+    // to be close and to assign a center to each foot getting a good silhouette score for both.
+    // Instead, if we have 2 or more people (4+ feet), the clustering with 2 fixed centroids will be
+    // less good than the free one resulting in a lower total silhouette score.
+    //
+    int bestK = -1;
     float bestSilhouette = -2;
-    vector<Point> bestFeetPos;
-    vector<Point> bestPeoplePos;
-    for (int K = 1; K < MAX_PEOPLE; K++) {
-        // Get the position of each person
-        vector<Point> peopleDetected = detectedPoints;
-        vector<Point> peoplePos = kmeans(peopleDetected, K, false);
-        float s = silhouette(peopleDetected, K);
+    vector<Point> bestFeetClusters;
+    vector<Point> bestPeopleClusters;
+    for (int K = 1; K <= MAX_PEOPLE && 2*K <= detectedPoints.size(); K++) {
+        // Cluster the points assigning a cluster to each person and evaluate the corresponding silhouette
+        vector<Point> peopleClusters = detectedPoints;
+        float s = (K == 1) ? kmeansSilhouette(peopleClusters, 2, false) : kmeansSilhouette(peopleClusters, K, false);
 
-        // Get the position of each foot
-        vector<Point> feetDetected = detectedPoints;
-        vector<Point> feetPos = kmeans(feetDetected, K*2, true);
-        s += silhouette(feetDetected, K*2);
+        // Cluster the points assigning a cluster to each foot and evaluate the corresponding silhouette
+        vector<Point> feetClusters = detectedPoints;
+        s += kmeansSilhouette(feetClusters, K*2, true);
 
         ROS_INFO("Sum of silhouettes for %d person and %d feet ---> %f", K, 2*K, s);
         if (bestSilhouette < s) {
-            bestPeoplePos = peoplePos;
-            bestFeetPos = feetPos;
+            bestPeopleClusters = (K == 1) ? detectedPoints : peopleClusters; // Despite being K=1, peopleClusters has been clustered with K=2
+            bestFeetClusters = feetClusters;
             bestSilhouette = s;
+            bestK = K;
         }
     }
 
-    ROS_INFO("Detected number of people: %ld", bestPeoplePos.size());
-    printPoints(bestFeetPos, bestPeoplePos);
+    ROS_INFO("Detected number of people: %d", bestK);
+    if (bestK == -1) return; // No one detected
+
+    // Computes the center of each foot and couple their indexes according to the corresponding person
+    vector<Point> feetPos(2*bestK);
+    vector<int> feetPointsCount(2*bestK, 0);
+    vector<set<int>> peopleFeetIndexes (bestK);
+    for (int i = 0; i < bestFeetClusters.size(); i++) {
+        int footIndex = bestFeetClusters[i].cluster_index;
+        feetPos[footIndex] += bestFeetClusters[i];
+        feetPointsCount[footIndex]++;
+
+        // Math the current foot index to the corresponding person index
+        int personIndex = bestPeopleClusters[i].cluster_index;
+        peopleFeetIndexes[personIndex].insert(footIndex);
+    }
+    for(int i = 0; i < 2*bestK; i++) {
+        feetPos[i] = feetPos[i]/feetPointsCount[i];
+    }
+
+    // Computes the points in between each pairs of feet
+    vector<Point> peoplePos(bestK);
+    for (int i = 0; i < bestK; i++) {
+        for (int feetIndex : peopleFeetIndexes[i]) {
+            peoplePos[i] += feetPos[feetIndex];
+        }
+
+        // Middle point between the two feet
+        peoplePos[i] = peoplePos[i]/2;
+    }
+
+    printPoints(feetPos, peoplePos);
 }
 
 

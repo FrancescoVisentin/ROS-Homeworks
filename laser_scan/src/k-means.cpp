@@ -2,9 +2,10 @@
 
 using namespace std;
 
-vector<Point> kmeans(vector<Point>& points, int K, bool forceCentroids, int maxIter) {
+float kmeansSilhouette(vector<Point>& points, int K, bool forceCentroids, int maxIter) {
+    if (K > points.size()) return -1; // More points than centers is infeasible
     srand(time(NULL));
-   
+
     // Initialize the centers with kmeans++
     vector<Point> centers(K);
     centers[0] = points[rand()%points.size()];
@@ -72,7 +73,7 @@ vector<Point> kmeans(vector<Point>& points, int K, bool forceCentroids, int maxI
         }
     }
 
-    return centers;
+    return silhouette(points, K);
 }
 
 
