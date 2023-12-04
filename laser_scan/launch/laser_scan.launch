@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<launch>
+<node name ="LaserScan" pkg="laser_scan" type="laser_scan"/>
+</launch>

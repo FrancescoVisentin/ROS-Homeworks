@@ -10,54 +10,6 @@ using namespace ros;
 
 const string TOPIC = "/scan";
 const int MAX_PEOPLE = 10;
-Publisher pub;                  //TODO REMOVE!!!!
-
-// Function to visualize results on Rviz for debugging                               //TODO REMOVE!!!!
-void printPoints(const vector<Point>& feetPos, const vector<Point>& peoplePos) {
-    // Green points for feet positions
-    visualization_msgs::Marker feetPoints;
-    feetPoints.header.frame_id = "base_scan";
-    feetPoints.action = visualization_msgs::Marker::ADD;
-    feetPoints.header.stamp = ros::Time::now();
-    feetPoints.pose.orientation.w = 1.0;
-    feetPoints.id = 0;
-    feetPoints.type = visualization_msgs::Marker::POINTS;
-    feetPoints.scale.x = 0.05;
-    feetPoints.scale.y = 0.05;
-    feetPoints.color.g = 1.0;
-    feetPoints.color.a = 1.0;
-
-    // Blue points for people positions
-    visualization_msgs::Marker peoplePoints = feetPoints;
-    peoplePoints.id = 1;
-    peoplePoints.color.g = 0.0;
-    peoplePoints.color.b = 1.0;
-
-    ROS_INFO("FEET POSITIONS:");
-    for (int i = 0; i < feetPos.size(); i++) {
-        ROS_INFO("Foot %d ---> (%f, %f)", i, feetPos[i].x, feetPos[i].y);
-        
-        geometry_msgs::Point p;
-        p.x = feetPos[i].x;
-        p.y = feetPos[i].y;
-        p.z = 0;
-        feetPoints.points.push_back(p);
-    }
-
-    ROS_INFO("CORRESPONDING PEOPLE POSITIONS:");
-    for (int i = 0; i < peoplePos.size(); i++) {
-        ROS_INFO("Person %d ---> (%f, %f)", i, peoplePos[i].x, peoplePos[i].y);
-
-        geometry_msgs::Point p;
-        p.x = peoplePos[i].x;
-        p.y = peoplePos[i].y;
-        p.z = 0;
-        peoplePoints.points.push_back(p);
-    }
-
-    pub.publish(feetPoints);
-    pub.publish(peoplePoints);
-}
 
 void detectPositions(const sensor_msgs::LaserScan::ConstPtr& msg) {
     vector<Point> detectedPoints;
@@ -105,7 +57,6 @@ void detectPositions(const sensor_msgs::LaserScan::ConstPtr& msg) {
         vector<Point> feetClusters = detectedPoints;
         s += kmeansSilhouette(feetClusters, K*2, true);
 
-        ROS_INFO("Sum of silhouettes for %d person and %d feet ---> %f", K, 2*K, s);
         if (bestSilhouette < s) {
             bestPeopleClusters = (K == 1) ? detectedPoints : peopleClusters; // Despite being K=1, peopleClusters has been clustered with K=2
             bestFeetClusters = feetClusters;
@@ -145,7 +96,13 @@ void detectPositions(const sensor_msgs::LaserScan::ConstPtr& msg) {
         peoplePos[i] = peoplePos[i]/2;
     }
 
-    printPoints(feetPos, peoplePos);
+    // Prints the results
+    for (int i = 0; i < bestK; i++) {
+        ROS_INFO("PERSON NUMBER %d ---> POS: (%f, %f)", i+1, peoplePos[i].x, peoplePos[i].y);
+        for (int feetIndex : peopleFeetIndexes[i]) {
+            ROS_INFO("\t-FOOT POS: (%f ,%f)", feetPos[feetIndex].x, feetPos[feetIndex].y); 
+        }
+    }
 }
 
 
@@ -154,8 +111,8 @@ int main(int argc, char** argv) {
 
     NodeHandle n;
     Subscriber sub = n.subscribe(TOPIC, 1000, detectPositions);
-    pub = n.advertise<visualization_msgs::Marker>("visualization_marker", 1000);
-
+    ROS_INFO("SUBSCRIBED TO %s - WAITING", TOPIC.c_str());
+   
     spin();
 
     return 0;

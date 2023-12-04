@@ -7,7 +7,7 @@ Da terminale:
 5) ```cd .. && catkin build```
 
 # Istruzioni per eseguire:
-L'eseguibile si chiama ```laserScan``` quindi: ```rosrun laser_scan laserScan```
+L'eseguibile si chiama ```laser_scan``` quindi: ```rosrun laser_scan laser_scan```
 
 # Istruzioni Rviz:
 Per visualizzare su Rviz l'output aggiungere ```LaserScan``` ed ```Marker``` con parametri settati come nello screen sotto
